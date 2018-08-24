@@ -1,0 +1,191 @@
+\documentclass[10pt, a4paper, oneside]{ltjsbook}
+\usepackage{amssymb,amsmath}
+\usepackage{fontspec}
+
+% 设置字体
+\usepackage{luatexja-preset}
+\usepackage{luatexja-fontspec}
+\setmainjfont{Inziu IosevkaCC SC}
+\setsansjfont{Inziu IosevkaCC SC}
+
+\setmainfont{Inziu IosevkaCC SC}
+\setsansfont{Inziu IosevkaCC SC}
+\setmonofont{Inziu IosevkaCC SC}
+
+% 设置别名
+\renewcommand{\contentsname}{目录}
+\renewcommand{\listfigurename}{插图目录}
+\renewcommand{\listtablename}{表格目录}
+\renewcommand{\refname}{参考文献}
+\renewcommand{\indexname}{索引}
+\renewcommand{\tablename}{表}
+\renewcommand{\figurename}{图}
+
+% 设置章节样式
+\usepackage[Lenny]{fncychap}
+\makeatletter
+\renewcommand{\DOCH}{%
+  \settowidth{\px}{\CNV\FmN{\@chapapp}}
+  \addtolength{\px}{2pt}
+  \settoheight{\py}{\CNV\FmN{\@chapapp}}
+  \addtolength{\py}{1pt}
+
+  \settowidth{\mylen}{\CNV\FmN{\@chapapp}\space\CNoV\thechapter}
+  \addtolength{\mylen}{1pt}
+  \settowidth{\pxx}{\CNoV\thechapter}
+  \addtolength{\pxx}{-1pt}
+
+  \settoheight{\pyy}{\CNoV\thechapter}
+  \addtolength{\pyy}{-2pt}
+  \setlength{\myhi}{\pyy}
+  \addtolength{\myhi}{-1\py}
+  \par
+  \parbox[b]{\textwidth}{%
+    \rule[\py]{\RW}{\myhi}%
+    \hskip -\RW%
+    \rule[\pyy]{\px}{\RW}%
+    \hskip -\px%
+    \raggedright%
+    \CNV\FmN{\@chapapp}\space\CNoV\thechapter\CNV\FmN{\@chappos}%
+    \hskip1pt%
+    \mghrulefill{\RW}%
+    \rule{\RW}{\pyy}\par\nobreak%
+    \vskip -\baselineskip%
+    \vskip -\pyy%
+    \hskip \mylen%
+    \mghrulefill{\RW}\par\nobreak%
+    \vskip \pyy}%
+  \vskip 20\p@}
+\makeatother
+
+% 根据环境变量切换字体，这里暂时不使用
+\usepackage{luacode}
+
+\begin{luacode*}
+--[[
+  USE_IPAFONT = os.getenv"USE_IPAFONT"
+  USE_YUFONT = os.getenv"USE_YUFONT"
+
+  if USE_YUFONT == "true" then
+    tex.sprint("\\AtBeginDocument{\\usepackage[yu-osx, deluxe, expert]{luatexja-preset}}")
+  elseif USE_IPAFONT == "true" then
+    tex.sprint("\\AtBeginDocument{\\usepackage[ipaex, deluxe, expert]{luatexja-preset}}")
+  else
+    tex.sprint("\\AtBeginDocument{\\usepackage[arphic, deluxe, expert]{luatexja-preset}}")
+  end
+]]
+\end{luacode*}
+
+\usepackage[centering]{geometry}
+
+% 生成目录与PDF信息
+\usepackage[%
+  unicode=true,
+  breaklinks=true
+  bookmarks=true,
+  colorlinks=false,
+  pdfborder={0 0 0},
+  bookmarksnumbered=true,
+  bookmarkstype=toc,
+  bookmarksopen=true,
+  pdftitle={KENDRYTE A1 数据手册},
+  pdfauthor={Canaan-Creative},
+  pdflang={CN}]{hyperref}
+
+\usepackage{xcolor}
+\usepackage{fancyvrb}
+\usepackage{mdframed}
+\usepackage{listings}
+\input{listings_setting.tex}
+
+\usepackage{longtable,booktabs}
+\usepackage{graphicx,grffile}
+
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>.8\linewidth\linewidth\else\Gin@nat@width\fi}
+\makeatother
+
+\setkeys{Gin}{width=\maxwidth, keepaspectratio}
+
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+\usepackage{ifthen}
+\LetLtxMacro\latexincludegraphics\includegraphics
+\makeatletter
+\renewcommand\includegraphics[2][]{%
+  \def\detectFileSvgOrNot[##1]##2.##3\nil{%
+    \ifthenelse{\equal{##3}{svg}}
+      {\input{##2.pdf_tex}}
+      {\latexincludegraphics[#1]{#2}}%
+  }%
+  \IfFileExists{#2}
+    {%
+      \filename@parse{#2}
+      \ifthenelse{\equal{\filename@ext}{svg}}
+        {\input{\filename@base.pdf_tex}}
+        {\latexincludegraphics[#1]{#2}}}
+    {%
+      \fbox{Image File doesn't exist}%
+      \message{Image File #2 doesn't exist^^J}}
+}
+\makeatother
+
+% Pandoc正确显示图像
+\setkeys{Gin}{keepaspectratio}
+
+\begin{document}
+
+\begin{luacode*}
+  require("lualibs-util-jsn.lua")
+
+  local target = "../target/"
+  local bookJsonFile = "../book.json"
+
+  function read(file)
+    local handler = io.open(file, "rb")
+    local content = handler:read("*all")
+    handler:close()
+    return content
+  end
+
+  function readSummary(file)
+    local handler = io.open(file, "r")
+    local summary = {}
+
+    for l in handler:lines() do
+      local n = string.match(l, "%[.*%]%((.*)%.md%)")
+      table.insert(summary, n)
+    end
+    handler:close()
+
+    return summary
+  end
+
+  function getTeXFile(target, name)
+    return target .. name .. ".tex"
+  end
+
+  function getFileName(f)
+    return string.match(f, "(.*)%.md")
+  end
+
+  local bookJson = utilities.json.tolua(read(bookJsonFile))
+  local readmeFile  = getTeXFile(target, getFileName(bookJson['structure']['readme']))
+  local summaryFile = target .. bookJson['structure']['summary']
+
+  tex.print("\\frontmatter")
+  tex.print("\\setcounter{secnumdepth}{0}")
+  tex.print("\\input{" .. readmeFile .. "}")
+
+  tex.print("\\tableofcontents")
+
+  tex.print("\\mainmatter")
+  tex.print("\\setcounter{secnumdepth}{3}")
+  for k, v in pairs(readSummary(summaryFile)) do
+    tex.print("\\input{" .. getTeXFile(target, v) .. "}")
+  end
+\end{luacode*}
+
+\end{document}

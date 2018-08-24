@@ -1,0 +1,44 @@
+stages:
+  - check
+  - build
+  - deploy
+
+job_check:
+  stage: check
+  script:
+    - . ~/.tnvm/tnvm.sh
+    - markdownlint --config .markdownlint.json -i node_modules .
+
+job_build:
+  stage: build
+  script:
+    - . ~/.tnvm/tnvm.sh
+    - ln -s ~/maix/cache/node_modules .
+    - gitbook install
+    - gitbook build
+    - rm -rf ~/maix/www/*
+    - cp -rf _book/* ~/maix/www/
+
+job_deploy:
+  stage: deploy
+  script:
+    - PROJECT_ROOT=$(pwd)
+    - . ~/.tnvm/tnvm.sh
+    - ln -s ~/maix/cache/node_modules .
+    - cd scripts
+    - ./build.sh
+    - cp $PROJECT_ROOT/target/index.pdf ~/maix/www/
+    - FILENAME=$(date +kendryte_datasheet_%Y%m%d%H%M%S.pdf)
+    - cp $PROJECT_ROOT/target/index.pdf $FILENAME
+    - MAIL_AUTHOR=$(git log -1 --pretty=format:'%an' | head -n 1)
+    - MAIL_TITLE="[DOCSYS] $MAIL_AUTHOR - $(git log --oneline --format=%B -n 1 HEAD | head -n 1) - $FILENAME"
+    - MAIL_BODY=$(printf "Hi $GITLAB_USER_EMAIL,\n\nDocument has been released. Visit https://datasheet.maix.io\n\n ")$(printf " \n\n\nPlease check attachment,\nThanks!\n\n\n\n--------\nSincerely,\nAutomatic document system by Huang Rui")
+    - if [ "$MAIL_LIST" == "" ]; then MAIL_LIST="$GITLAB_USER_EMAIL"; else MAIL_LIST="$GITLAB_USER_EMAIL,$MAIL_LIST"; fi
+    - |
+      echo "Send E-mail to $MAIL_LIST ..." && \
+      nodemailer \
+        $MAIL_LIST \
+        $SMTP_USERNAME \
+        "$MAIL_BODY" \
+        --subject "$MAIL_TITLE" \
+        --attachment $FILENAME
